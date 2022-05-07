@@ -1,1 +1,1 @@
-# HandLandmark_kor_alphabet_classifer
+# HandLandmark_ASL_alphabet_classifer
