@@ -2,76 +2,83 @@
 extract landmarks from data.csv
 and save them as a npy file
 """
+from typing import Union, List
+
 import cv2
 import mediapipe as mp
 import argparse
 import numpy as np
 import pandas as pd
+from pathlib import Path
 
 parser = argparse.ArgumentParser(description='landmark extractor')
 parser.add_argument('--data', required=True, help='data csv file generated from train_test_split')
-parser.add_argument('--normalized', default='y', help='y or n, if y record normalized coordinates (default=y)')
-parser.add_argument('--exclude_z', default='y', help='y or n, if y record x,y coordinates only')
+parser.add_argument('--normalized', type=int, default=1, help='1 or 0, if 1 record normalized coordinates (default=1)')
+parser.add_argument('--exclude_z', type=int, default=1, help='1 or 0, if 1 record x,y coordinates only')
 args = parser.parse_args()
 
 mp_hands = mp.solutions.hands
 
 
-def get_landmarks(img, normalized):
+def get_landmarks(img: np.ndarray, normalized, exclude_z) -> Union[None, List[tuple]]:
     with mp_hands.Hands(
             static_image_mode=True,
             max_num_hands=1,
             model_complexity=1,
             min_detection_confidence=0.7) as hands:
-        img = cv2.flip(img, 1)
+        img: np.ndarray = cv2.flip(img, 1)
         results = hands.process(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))  # BGR to RGB
 
-        if not normalized:
-            image_height, image_width, _ = img.shape
-            for hand_landmarks in results.multi_hand_landmarks:  # per hand
-                print(
-                    f'Index finger tip coordinates: (',
-                    f'{hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].x * image_width}, '
-                    f'{hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].y * image_height})'
-                )
+        image_height, image_width, _ = img.shape
+        normalize_func = lambda coor: (coor[0] * image_width, coor[1] * image_height, *coor[2:])
 
         print('Handedness:', results.multi_handedness)
-        return results.multi_hand_landmarks
+        results = results.multi_hand_landmarks
+        if results is None:
+            return None
+        landmarks = results[0].landmark
+
+        landmarks_list = []
+        for coor in landmarks:
+            coor = (coor.x, coor.y) if exclude_z else (coor.x, coor.y, coor.z)
+            coor = coor if normalized else normalize_func(coor)
+            landmarks_list.append(coor)
+
+        return landmarks_list
 
 
-def extract_landmarks(file_path: str, normalized=False) -> None:
+def extract_landmarks(file_path: str, normalized=False, exclude_z=True) -> None:
     dir_path, file_name = file_path.rsplit('/', 1)
-    print(dir_path, file_name)  # TODO: logger
     file_name = file_name.rsplit('.', 1)[0]
 
-    img = cv2.imread(file_path)
+    img: np.ndarray = cv2.imread(file_path)
 
     if img is None:  # is video
         cap = cv2.VideoCapture(file_path)
         if not cap.isOpened():
             raise IOError(f'could not read file {file_path}')
 
-        landmarks = []
+        landmarks_collection = []  # (# of frames, 21, 2 or 3)
         while cap.isOpened():
             ret, frame = cap.read()  # BGR
             if not ret:
                 break
 
-            results = get_landmarks(frame, normalized)
-            if results is None:
+            landmarks = get_landmarks(frame, normalized, exclude_z)
+            if landmarks is None:
                 continue
-            landmarks.append(results.multi_handedness[0])
+            landmarks_collection.append(landmarks)
 
         cap.release()
-        np.save(file_path + file_name + '.npy', np.array(landmarks))
+        np.save(Path(dir_path).joinpath(file_name + '.npy'), np.array(landmarks_collection))
     else:  # is img
-        results = get_landmarks(img, normalized)
-        if results is None:
+        landmarks = get_landmarks(img, normalized, exclude_z)
+        if landmarks is None:
             return
-        np.save(file_path + file_name + '.npy', results.multi_handedness[0])
+        np.save(Path(dir_path).joinpath(file_name + '.npy'), landmarks)
 
 
 df = pd.read_csv(args.data)
 
-for s in df['path']:
-    extract_landmarks(file_path=..., normalized=False)
+for file_path in df['path']:
+    extract_landmarks(file_path=file_path, normalized=args.normalized, exclude_z=args.exclude_z)

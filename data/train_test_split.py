@@ -11,7 +11,6 @@ from pathlib import Path
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from utils.extract_landmarks import extract_landmarks
 
 parser = argparse.ArgumentParser(description='train test split')
 # TODO: seed

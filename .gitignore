@@ -187,3 +187,6 @@ fabric.properties
 **/asl_alphabet_test/
 
 dataset/
+**/data.csv
+**/test.csv
+**/train.csv
