@@ -25,7 +25,7 @@ def get_landmarks(img: np.ndarray, normalized, exclude_z) -> Union[None, List[tu
             static_image_mode=True,
             max_num_hands=1,
             model_complexity=1,
-            min_detection_confidence=0.7) as hands:
+            min_detection_confidence=0.5) as hands:
         img: np.ndarray = cv2.flip(img, 1)
         results = hands.process(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))  # BGR to RGB
 
